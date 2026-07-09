@@ -1,0 +1,21 @@
+# Node
+node_modules/
+.next/
+out/
+build/
+.npm/
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environment
+.env
+.env.local
+
+# Temp Files
+temp_*.pdf
+*.log
+*.sqlite
