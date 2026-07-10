@@ -48,6 +48,13 @@ export default function App() {
   // Master Sheet Upload State
   const [sheetUrl, setSheetUrl]               = useState(() => localStorage.getItem('sheetUrl') || 'https://docs.google.com/spreadsheets/d/10FKTvgZN2osKq2KsO26Ua0BGnndgC0cA/edit?usp=sharing');
   const [webhookUrl, setWebhookUrl]           = useState(() => localStorage.getItem('webhookUrl') || '');
+  const [sheetTabName, setSheetTabName]       = useState(() => localStorage.getItem('sheetTabName') || 'Sheet1');
+  const [verifiedItems, setVerifiedItems]     = useState(new Set());
+  const [masterFilterName, setMasterFilterName] = useState('All');
+  
+  useEffect(() => { localStorage.setItem('sheetTabName', sheetTabName); }, [sheetTabName]);
+  useEffect(() => { setVerifiedItems(new Set()); }, [selectedInvoice]);
+
   
   useEffect(() => { localStorage.setItem('sheetUrl', sheetUrl); }, [sheetUrl]);
   useEffect(() => { localStorage.setItem('webhookUrl', webhookUrl); }, [webhookUrl]);
@@ -261,7 +268,7 @@ export default function App() {
       const res = await fetch('/api/v1/manual-write-back', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ product_name: productName, hsn_code: hsnCode, invoice_number: invoiceNumber || "", webhook_url: webhookUrl })
+        body: JSON.stringify({ product_name: productName, hsn_code: hsnCode, invoice_number: invoiceNumber || "", webhook_url: webhookUrl, sheet_tab_name: sheetTabName })
       });
       const data = await res.json();
       if (data.status === 'success') {
@@ -289,7 +296,7 @@ export default function App() {
       item.ai_validation && 
       item.ai_validation.matched_product && 
       item.ai_validation.matched_product !== '—' &&
-      item.ai_validation.matched_product !== 'No match found' &&
+      item.ai_validation.matched_product !== 'No match found' && verifiedItems.has(item.extracted_name) &&
       item.extracted_hsn
     );
     
@@ -311,7 +318,7 @@ export default function App() {
             product_name: item.ai_validation.matched_product, 
             hsn_code: item.extracted_hsn, 
             invoice_number: invoice.extracted_header.invoice_number || "", 
-            webhook_url: webhookUrl 
+            webhook_url: webhookUrl, sheet_tab_name: sheetTabName 
           })
         });
         const data = await res.json();
@@ -701,7 +708,8 @@ export default function App() {
                                   <th className="px-4 py-3">HSN</th>
                                   <th className="px-4 py-3">AI Match</th>
                                   <th className="px-4 py-3">Confidence</th>
-                                  <th className="px-4 py-3">Status</th>
+                                  <th className="px-4 py-3">AI Status</th>
+                                  <th className="px-4 py-3">Manual Status</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-teal-800/30">
@@ -732,7 +740,7 @@ export default function App() {
                                               {masterItems.map((mi, mi_idx) => (<option key={mi_idx} value={mi.name}>{mi.name}</option>))}
                                             </select>
                                             <button 
-                                              onClick={() => handleManualWriteBack(ai.matched_product, item.extracted_hsn, selectedInvoice.extracted_header.invoice_number)}
+                                              onClick={() => { if (!verifiedItems.has(item.extracted_name)) { alert("Please check the Manual Status as Valid for this row first."); return; } handleManualWriteBack(ai.matched_product, item.extracted_hsn, selectedInvoice.extracted_header.invoice_number); }}
                                               className="bg-teal-900/50 hover:bg-teal-800 text-teal-300 border border-teal-700/50 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide flex items-center justify-center space-x-1"
                                             >
                                               <Database className="w-3 h-3" />
@@ -753,6 +761,22 @@ export default function App() {
                                           <div className={`w-1.5 h-1.5 rounded-full ${meta.dot}`}></div>
                                           <span>{ai.status}</span>
                                         </span>
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <label className="flex items-center space-x-2 cursor-pointer">
+                                          <input 
+                                            type="checkbox" 
+                                            checked={verifiedItems.has(item.extracted_name)}
+                                            onChange={(e) => {
+                                              const newSet = new Set(verifiedItems);
+                                              if (e.target.checked) newSet.add(item.extracted_name);
+                                              else newSet.delete(item.extracted_name);
+                                              setVerifiedItems(newSet);
+                                            }}
+                                            className="w-4 h-4 text-teal-600 bg-teal-950 border-teal-700 rounded focus:ring-teal-500 focus:ring-2 cursor-pointer"
+                                          />
+                                          <span className="text-xs font-bold text-teal-100">{verifiedItems.has(item.extracted_name) ? 'Valid' : 'Invalid'}</span>
+                                        </label>
                                       </td>
                                     </tr>
                                   );
@@ -798,7 +822,7 @@ export default function App() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <div className="bg-teal-900 shadow-sm border border-teal-800 rounded-xl p-4">
                 <label className="text-[10px] uppercase tracking-widest text-teal-400/80 font-bold block mb-2">Public Google Sheet URL (For Reading)</label>
                 <input
@@ -819,6 +843,18 @@ export default function App() {
                   className="w-full text-xs bg-teal-950 border border-teal-700 focus:border-teal-500 rounded-lg px-3 py-2.5 text-teal-100 focus:outline-none"
                 />
               </div>
+
+              <div className="bg-teal-900 shadow-sm border border-teal-800 rounded-xl p-4">
+                <label className="text-[10px] uppercase tracking-widest text-teal-400/80 font-bold block mb-2">Target Sheet Tab Name</label>
+                <input
+                  type="text"
+                  value={sheetTabName}
+                  onChange={e => setSheetTabName(e.target.value)}
+                  placeholder="e.g. Sheet3"
+                  className="w-full text-xs bg-teal-950 border border-teal-700 focus:border-teal-500 rounded-lg px-3 py-2.5 text-teal-100 focus:outline-none"
+                />
+              </div>
+
             </div>
 
             {masterUploadError && (
@@ -828,16 +864,32 @@ export default function App() {
               </div>
             )}
 
-            <div className="relative max-w-lg">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-400/80" />
-              <input
-                type="text"
-                placeholder="Search product name or HSN code…"
-                value={masterSearch}
-                onChange={e => setMasterSearch(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-teal-900 shadow-sm border border-teal-800 focus:border-teal-500 focus:outline-none rounded-xl text-sm text-teal-100 placeholder-slate-500"
-              />
+
+            <div className="flex space-x-4 max-w-2xl">
+              <div className="relative flex-1">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-teal-400/80" />
+                <input
+                  type="text"
+                  placeholder="Search product name or HSN code…"
+                  value={masterSearch}
+                  onChange={e => setMasterSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-teal-900 shadow-sm border border-teal-800 focus:border-teal-500 focus:outline-none rounded-xl text-sm text-teal-100 placeholder-slate-500"
+                />
+              </div>
+              <div className="relative w-64">
+                <select
+                  value={masterFilterName}
+                  onChange={e => setMasterFilterName(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-teal-900 shadow-sm border border-teal-800 focus:border-teal-500 focus:outline-none rounded-xl text-sm text-teal-100 appearance-none"
+                >
+                  <option value="All">All Products</option>
+                  {Array.from(new Set(masterItems.map(i => i.name).filter(Boolean))).sort().map(name => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              </div>
             </div>
+
 
             <div className="bg-teal-900 border border-teal-800 shadow-sm border border-teal-800 rounded-2xl overflow-hidden">
               <table className="w-full text-sm text-left">
@@ -855,6 +907,7 @@ export default function App() {
                     </tr>
                   ) : (
                     masterItems
+                      .filter(i => masterFilterName === 'All' || i.name === masterFilterName)
                       .filter(i => i.name?.toLowerCase().includes(masterSearch.toLowerCase()) || i.HSN?.includes(masterSearch))
                       .map((item, idx) => (
                         <tr key={idx} className="hover:bg-teal-950 transition-colors">

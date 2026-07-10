@@ -226,6 +226,7 @@ class WriteBackRequest(BaseModel):
     hsn_code: str
     invoice_number: str
     webhook_url: str
+    sheet_tab_name: str = "Sheet1"
 
 @app.post("/api/v1/manual-write-back")
 async def manual_write_back(request: WriteBackRequest):
@@ -254,7 +255,8 @@ async def manual_write_back(request: WriteBackRequest):
         payload = {
             "invoiceNumber": request.invoice_number,
             "productName": request.product_name,
-            "hsnCode": request.hsn_code
+            "hsnCode": request.hsn_code,
+            "sheetTabName": request.sheet_tab_name
         }
         
         response = requests.post(request.webhook_url, json=payload)
